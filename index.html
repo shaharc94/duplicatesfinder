@@ -289,6 +289,30 @@
             });
             renderTable();
         }
+        let sortDirection = {}; // משתנה למעקב אחר כיוון המיון עבור כל עמודה
+
+        function sortTable(columnIndex) {
+            if (!sortDirection[columnIndex]) {
+                sortDirection[columnIndex] = "asc"; // ברירת מחדל: סדר עולה
+            } else {
+                sortDirection[columnIndex] = sortDirection[columnIndex] === "asc" ? "desc" : "asc";
+            }
+
+            const direction = sortDirection[columnIndex];
+
+            duplicateEntries.sort((a, b) => {
+                let valueA = columnIndex === 0 ? a[0] : a[1].length;
+                let valueB = columnIndex === 0 ? b[0] : b[1].length;
+
+                if (direction === "asc") {
+                    return valueA > valueB ? 1 : -1;
+                } else {
+                    return valueA < valueB ? 1 : -1;
+                }
+            });
+
+            renderTable();
+}
 
         function resetFilters() {
             duplicateEntries = [...originalEntries]; // שחזור הנתונים המקוריים

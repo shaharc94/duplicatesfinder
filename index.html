@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>חיפוש כפילויות</title>
+    <style>
+        /* עיצוב כללי */
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-top: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-label {
+            display: block;
+            text-align: center;
+            background-color: #6200ea;
+            color: white;
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            margin: 20px auto;
+            max-width: 200px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            transition: background-color 0.3s ease;
+        }
+
+        .file-label:hover {
+            background-color: #3700b3;
+        }
+
+        .output {
+            margin-top: 20px;
+        }
+
+        .controls {
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .controls input {
+            padding: 8px;
+            font-size: 14px;
+            width: 48%;
+            border: 1px solid #ccc;
+            border-radius: 12px;
+        }
+
+        .controls button {
+            padding: 8px 12px;
+            font-size: 14px;
+            background-color: #6200ea;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .controls button:hover {
+            background-color: #3700b3;
+        }
+
+        select {
+            display: block;
+            margin: 10px auto;
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 12px;
+            border: 1px solid #ccc;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        table th, table td {
+            border: 1px solid #e0e0e0;
+            padding: 12px;
+            text-align: right;
+        }
+
+        table th {
+            background-color: #6200ea;
+            color: white;
+            cursor: pointer;
+        }
+
+        table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .error, .success, .summary {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 16px;
+        }
+
+        .error {
+            color: red;
+        }
+
+        .success {
+            color: green;
+        }
+
+        .summary {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>חיפוש כפילויות</h1>
+    <div class="container">
+        <label for="fileInput" class="file-label">העלה קובץ</label>
+        <input type="file" id="fileInput" accept=".xlsx, .xls, .csv">
+        <select id="sheetSelect" style="display: none;"></select>
+        <div class="controls">
+            <input type="text" id="searchInput" placeholder="חפש ערך...">
+            <button id="resetButton">איפוס</button>
+        </div>
+        <div id="output" class="output"></div>
+        <p class="summary" id="summary"></p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script>
+        let workbook; // משתנה לאחסון הקובץ
+        let duplicateEntries = [];
+        let originalEntries = []; // לשמירת הנתונים המקוריים
+
+        document.getElementById('fileInput').addEventListener('change', handleFile);
+        document.getElementById('sheetSelect').addEventListener('change', handleSheetChange);
+        document.getElementById('searchInput').addEventListener('input', renderTable);
+        document.getElementById('resetButton').addEventListener('click', resetFilters);
+
+        function handleFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const data = new Uint8Array(e.target.result);
+                if (file.name.endsWith('.csv')) {
+                    const csvData = new TextDecoder().decode(data);
+                    const rows = csvData.split('\n').map(row => row.split(','));
+                    processData(rows);
+                } else {
+                    workbook = XLSX.read(data, { type: 'array' });
+                    populateSheetSelector(workbook.SheetNames);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function populateSheetSelector(sheetNames) {
+            const sheetSelect = document.getElementById('sheetSelect');
+            sheetSelect.innerHTML = '';
+            sheetNames.forEach((sheet, index) => {
+                const option = document.createElement('option');
+                option.value = sheet;
+                option.textContent = `גיליון ${index + 1}: ${sheet}`;
+                sheetSelect.appendChild(option);
+            });
+            sheetSelect.style.display = 'block';
+            sheetSelect.dispatchEvent(new Event('change')); // טוען את הגיליון הראשון כברירת מחדל
+        }
+
+        function handleSheetChange(event) {
+            const sheetName = event.target.value;
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            processData(jsonData);
+        }
+
+        function processData(data) {
+            const outputDiv = document.getElementById('output');
+            const summary = document.getElementById('summary');
+            outputDiv.innerHTML = '';
+            summary.textContent = '';
+
+            if (!data.length) {
+                outputDiv.innerHTML = '<p class="error">לא נמצאו נתונים בקובץ.</p>';
+                return;
+            }
+
+            const duplicates = {};
+            data.forEach((row, rowIndex) => {
+                row.forEach((cell) => {
+                    const key = JSON.stringify(cell);
+                    if (!duplicates[key]) {
+                        duplicates[key] = [];
+                    }
+                    duplicates[key].push(rowIndex + 1);
+                });
+            });
+
+            duplicateEntries = Object.entries(duplicates).filter(([key, rows]) => rows.length > 1);
+            originalEntries = [...duplicateEntries]; // שמירת הנתונים המקוריים
+
+            if (!duplicateEntries.length) {
+                outputDiv.innerHTML = '<p class="success">לא נמצאו כפילויות.</p>';
+                return;
+            }
+
+            summary.textContent = `נמצאו ${duplicateEntries.length} כפילויות.`;
+            renderTable();
+        }
+
+        function renderTable() {
+            const outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = '';
+
+            const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+            let filteredEntries = duplicateEntries;
+
+            if (searchQuery) {
+                filteredEntries = filteredEntries.filter(([value]) =>
+                    value.toLowerCase().includes(searchQuery)
+                );
+            }
+
+            if (!filteredEntries.length) {
+                outputDiv.innerHTML = '<p class="error">לא נמצאו תוצאות תואמות.</p>';
+                return;
+            }
+
+            const table = document.createElement('table');
+            const thead = document.createElement('thead');
+            const tbody = document.createElement('tbody');
+
+            thead.innerHTML = `
+                <tr>
+                    <th onclick="sortTable(0)">ערך</th>
+                    <th onclick="sortTable(1)">שורות</th>
+                </tr>
+            `;
+
+            filteredEntries.forEach(([value, rows]) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${value}</td>
+                    <td>${rows.join(', ')}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            table.appendChild(thead);
+            table.appendChild(tbody);
+            outputDiv.appendChild(table);
+        }
+
+        function sortTable(columnIndex) {
+            duplicateEntries.sort((a, b) => {
+                if (columnIndex === 0) {
+                    return a[0].localeCompare(b[0]);
+                } else {
+                    return a[1].length - b[1].length;
+                }
+            });
+            renderTable();
+        }
+
+        function resetFilters() {
+            duplicateEntries = [...originalEntries]; // שחזור הנתונים המקוריים
+            document.getElementById('searchInput').value = ''; // איפוס החיפוש
+            renderTable(); // הצגת הטבלה מחדש
+        }
+    </script>
+</body>
+</html>

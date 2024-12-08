@@ -3,239 +3,264 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>חיפוש כפילויות</title>
+    <title>דירוג הצעות</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <style>
-        body {
-            font-family: 'Arial', sans-serif;
-            background-color: #f5f5f5;
+        * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
+            font-family: system-ui, -apple-system, sans-serif;
         }
 
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-top: 20px;
+        body {
+            background-color: #f5f5f5;
+            padding: 2rem;
         }
 
         .container {
             max-width: 800px;
-            margin: 20px auto;
-            background: #fff;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            padding: 20px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
-        input[type="file"] {
-            display: none;
-        }
-
-        .file-label {
-            display: block;
+        h1 {
+            color: #333;
+            margin-bottom: 2rem;
             text-align: center;
-            background-color: #6200ea;
-            color: white;
-            padding: 12px 20px;
-            font-size: 16px;
-            border-radius: 12px;
-            cursor: pointer;
-            margin: 20px auto;
-            max-width: 200px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            transition: background-color 0.3s ease;
         }
 
-        .file-label:hover {
-            background-color: #3700b3;
-        }
-
-        .controls {
-            margin-bottom: 10px;
+        .proposal {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
-        .controls input {
-            padding: 8px;
-            font-size: 14px;
-            width: 48%;
-            border: 1px solid #ccc;
-            border-radius: 12px;
+        .proposal.voting-closed {
+            opacity: 0.7;
         }
 
-        .controls button {
-            padding: 8px 12px;
-            font-size: 14px;
-            background-color: #6200ea;
+        .proposal.voting-closed .stars {
+            pointer-events: none;
+        }
+
+        .stars {
+            display: flex;
+            gap: 4px;
+        }
+
+        .star {
+            cursor: pointer;
+            font-size: 24px;
+            color: #ddd;
+            transition: color 0.2s;
+        }
+
+        .star.active {
+            color: #ffd700;
+        }
+
+        .admin-controls {
+            margin: 2rem 0;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #eee;
+        }
+
+        .voting-status {
+            text-align: center;
+            padding: 0.5rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .voting-status.open {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .voting-status.closed {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .add-proposal {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #eee;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.5rem;
+            margin: 0.5rem 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        button {
+            background-color: #0066cc;
             color: white;
             border: none;
-            border-radius: 12px;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
             cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
-
-        .controls button:hover {
-            background-color: #3700b3;
-        }
-
-        table {
             width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            font-size: 1rem;
+            margin-top: 0.5rem;
+            transition: background-color 0.2s;
         }
 
-        table th, table td {
-            border: 1px solid #e0e0e0;
-            padding: 12px;
-            text-align: right;
+        button:hover {
+            background-color: #0052a3;
         }
 
-        table th {
-            background-color: #6200ea;
-            color: white;
-            cursor: pointer;
+        button.toggle-voting {
+            background-color: #28a745;
         }
 
-        table tr:nth-child(even) {
-            background-color: #f9f9f9;
+        button.toggle-voting.closed {
+            background-color: #dc3545;
         }
 
-        .error, .success, .summary {
-            text-align: center;
-            margin-top: 20px;
-            font-size: 16px;
-        }
-
-        .error {
+        .error-message {
+            display: none;
             color: red;
-        }
-
-        .success {
-            color: green;
+            text-align: center;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
-    <h1>חיפוש כפילויות</h1>
     <div class="container">
-        <label for="fileInput" class="file-label">העלה קובץ</label>
-        <input type="file" id="fileInput" accept=".xlsx, .xls, .csv">
-        <select id="sheetSelect" style="display: none;"></select>
-        <div class="controls">
-            <input type="text" id="searchInput" placeholder="חפש ערך...">
-            <button id="resetButton">איפוס</button>
+        <h1>דירוג הצעות</h1>
+        
+        <div class="voting-status" id="voting-status"></div>
+        
+        <div class="admin-controls">
+            <h2>ניהול הצבעות</h2>
+            <input type="password" id="voting-admin-code" placeholder="קוד מנהל">
+            <button id="toggle-voting-btn" onclick="toggleVoting()">טוען...</button>
+            <div id="error-message" class="error-message"></div>
         </div>
-        <div id="output"></div>
-        <p class="summary" id="summary"></p>
+
+        <div id="proposals-list"></div>
+        
+        <div class="add-proposal">
+            <h2>הוספת הצעה חדשה</h2>
+            <input type="text" id="new-proposal" placeholder="הכנס הצעה חדשה">
+            <input type="password" id="admin-code" placeholder="קוד מנהל">
+            <button onclick="addProposal()">הוסף הצעה</button>
+            <div id="add-error" class="error-message">קוד מנהל שגוי או הצעה ריקה</div>
+        </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script>
-        let workbook;
-        let duplicateEntries = [];
-        let originalEntries = [];
-        let sortDirection = {};
+        // הצפנת קוד המנהל
+        const ADMIN_CODE_HASH = '96db2c156a5c8a7da07d9bb19c91ad2a4c91d54be8c1adf721366ccf597e92f5'; // הצפנה של 1627
+        
+        let proposals = [
+            { id: 1, text: "הצעה ראשונה", rating: 0 },
+            { id: 2, text: "הצעה שנייה", rating: 0 },
+            { id: 3, text: "הצעה שלישית", rating: 0 }
+        ];
 
-        document.getElementById('fileInput').addEventListener('change', handleFile);
-        document.getElementById('sheetSelect').addEventListener('change', handleSheetChange);
-        document.getElementById('searchInput').addEventListener('input', renderTable);
-        document.getElementById('resetButton').addEventListener('click', resetFilters);
+        let isVotingOpen = true;
 
-        function handleFile(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function (e) {
-                const data = new Uint8Array(e.target.result);
-                if (file.name.endsWith('.csv')) {
-                    const rows = new TextDecoder().decode(data).split('\n').map(row => row.split(','));
-                    processData(rows);
-                } else {
-                    workbook = XLSX.read(data, { type: 'array' });
-                    populateSheetSelector(workbook.SheetNames);
-                }
-            };
-            reader.readAsArrayBuffer(file);
+        function updateVotingStatus() {
+            const statusElement = document.getElementById('voting-status');
+            const toggleButton = document.getElementById('toggle-voting-btn');
+            
+            statusElement.className = `voting-status ${isVotingOpen ? 'open' : 'closed'}`;
+            statusElement.textContent = isVotingOpen ? '🟢 ההצבעות פתוחות' : '🔴 ההצבעות סגורות';
+            
+            toggleButton.textContent = isVotingOpen ? 'סגור הצבעות' : 'פתח הצבעות';
+            toggleButton.className = `toggle-voting ${isVotingOpen ? '' : 'closed'}`;
         }
 
-        function populateSheetSelector(sheetNames) {
-            const sheetSelect = document.getElementById('sheetSelect');
-            sheetSelect.innerHTML = '';
-            sheetNames.forEach((sheet, index) => {
-                const option = document.createElement('option');
-                option.value = sheet;
-                option.textContent = `גיליון ${index + 1}: ${sheet}`;
-                sheetSelect.appendChild(option);
-            });
-            sheetSelect.style.display = 'block';
-            sheetSelect.dispatchEvent(new Event('change'));
+        function showErrorMessage(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 3000);
         }
 
-        function handleSheetChange() {
-            const sheetName = document.getElementById('sheetSelect').value;
-            const worksheet = workbook.Sheets[sheetName];
-            processData(XLSX.utils.sheet_to_json(worksheet, { header: 1 }));
+        function toggleVoting() {
+            const adminCode = document.getElementById('voting-admin-code').value;
+            const hashedInput = CryptoJS.SHA256(adminCode).toString();
+            
+            if (hashedInput === ADMIN_CODE_HASH) {
+                isVotingOpen = !isVotingOpen;
+                document.getElementById('voting-admin-code').value = '';
+                updateVotingStatus();
+                renderProposals();
+            } else {
+                showErrorMessage('קוד מנהל שגוי');
+            }
         }
 
-        function processData(data) {
-            duplicateEntries = [];
-            originalEntries = [];
-            const duplicates = {};
-
-            data.forEach((row, rowIndex) => {
-                row.forEach((cell) => {
-                    const key = JSON.stringify(cell);
-                    if (!duplicates[key]) duplicates[key] = [];
-                    duplicates[key].push(rowIndex + 1);
-                });
-            });
-
-            duplicateEntries = Object.entries(duplicates).filter(([_, rows]) => rows.length > 1);
-            originalEntries = [...duplicateEntries];
-            renderTable();
+        function renderProposals() {
+            const container = document.getElementById('proposals-list');
+            proposals.sort((a, b) => b.rating - a.rating);
+            container.innerHTML = proposals.map(proposal => `
+                <div class="proposal ${!isVotingOpen ? 'voting-closed' : ''}">
+                    <span>${proposal.text}</span>
+                    <div class="stars" data-id="${proposal.id}">
+                        ${Array.from({length: 5}, (_, i) => `
+                            <span class="star ${i < proposal.rating ? 'active' : ''}" 
+                                  onclick="rate(${proposal.id}, ${i + 1})">★</span>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
         }
 
-        function renderTable() {
-            const searchQuery = document.getElementById('searchInput').value.toLowerCase();
-            const output = document.getElementById('output');
-            const filteredEntries = searchQuery
-                ? duplicateEntries.filter(([value]) => value.toLowerCase().includes(searchQuery))
-                : duplicateEntries;
-
-            output.innerHTML = !filteredEntries.length
-                ? '<p class="error">לא נמצאו תוצאות תואמות.</p>'
-                : `<table><thead>
-                        <tr>
-                            <th onclick="sortTable(0)">ערך</th>
-                            <th onclick="sortTable(1)">שורות</th>
-                        </tr>
-                    </thead><tbody>
-                        ${filteredEntries
-                            .map(([value, rows]) => `<tr><td>${value}</td><td>${rows.join(', ')}</td></tr>`)
-                            .join('')}
-                    </tbody></table>`;
+        function rate(id, rating) {
+            if (!isVotingOpen) {
+                showErrorMessage('ההצבעות סגורות כרגע');
+                return;
+            }
+            
+            const proposal = proposals.find(p => p.id === id);
+            if (proposal) {
+                proposal.rating = rating;
+                renderProposals();
+            }
         }
 
-        function sortTable(columnIndex) {
-            sortDirection[columnIndex] = sortDirection[columnIndex] === 'asc' ? 'desc' : 'asc';
-            duplicateEntries.sort((a, b) => {
-                const [valA, valB] = columnIndex === 0 ? [a[0], b[0]] : [a[1].length, b[1].length];
-                return sortDirection[columnIndex] === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-            });
-            renderTable();
+        function addProposal() {
+            const newProposal = document.getElementById('new-proposal').value.trim();
+            const adminCode = document.getElementById('admin-code').value;
+            const error = document.getElementById('add-error');
+            
+            const hashedInput = CryptoJS.SHA256(adminCode).toString();
+            
+            if (hashedInput === ADMIN_CODE_HASH && newProposal) {
+                const newId = Math.max(...proposals.map(p => p.id)) + 1;
+                proposals.push({ id: newId, text: newProposal, rating: 0 });
+                document.getElementById('new-proposal').value = '';
+                document.getElementById('admin-code').value = '';
+                error.style.display = 'none';
+                renderProposals();
+            } else {
+                error.style.display = 'block';
+            }
         }
 
-        function resetFilters() {
-            duplicateEntries = [...originalEntries];
-            document.getElementById('searchInput').value = '';
-            renderTable();
-        }
+        updateVotingStatus();
+        renderProposals();
     </script>
 </body>
 </html>

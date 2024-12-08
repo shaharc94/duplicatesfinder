@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>חיפוש כפילויות</title>
     <style>
-        /* עיצוב כללי */
         body {
             font-family: 'Arial', sans-serif;
             background-color: #f5f5f5;
@@ -51,10 +50,6 @@
             background-color: #3700b3;
         }
 
-        .output {
-            margin-top: 20px;
-        }
-
         .controls {
             margin-bottom: 10px;
             display: flex;
@@ -83,15 +78,6 @@
 
         .controls button:hover {
             background-color: #3700b3;
-        }
-
-        select {
-            display: block;
-            margin: 10px auto;
-            padding: 10px;
-            font-size: 16px;
-            border-radius: 12px;
-            border: 1px solid #ccc;
         }
 
         table {
@@ -132,10 +118,6 @@
         .success {
             color: green;
         }
-
-        .summary {
-            color: #333;
-        }
     </style>
 </head>
 <body>
@@ -148,15 +130,16 @@
             <input type="text" id="searchInput" placeholder="חפש ערך...">
             <button id="resetButton">איפוס</button>
         </div>
-        <div id="output" class="output"></div>
+        <div id="output"></div>
         <p class="summary" id="summary"></p>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script>
-        let workbook; // משתנה לאחסון הקובץ
+        let workbook;
         let duplicateEntries = [];
-        let originalEntries = []; // לשמירת הנתונים המקוריים
+        let originalEntries = [];
+        let sortDirection = {};
 
         document.getElementById('fileInput').addEventListener('change', handleFile);
         document.getElementById('sheetSelect').addEventListener('change', handleSheetChange);
@@ -171,8 +154,7 @@
             reader.onload = function (e) {
                 const data = new Uint8Array(e.target.result);
                 if (file.name.endsWith('.csv')) {
-                    const csvData = new TextDecoder().decode(data);
-                    const rows = csvData.split('\n').map(row => row.split(','));
+                    const rows = new TextDecoder().decode(data).split('\n').map(row => row.split(','));
                     processData(rows);
                 } else {
                     workbook = XLSX.read(data, { type: 'array' });
@@ -192,132 +174,67 @@
                 sheetSelect.appendChild(option);
             });
             sheetSelect.style.display = 'block';
-            sheetSelect.dispatchEvent(new Event('change')); // טוען את הגיליון הראשון כברירת מחדל
+            sheetSelect.dispatchEvent(new Event('change'));
         }
 
-        function handleSheetChange(event) {
-            const sheetName = event.target.value;
+        function handleSheetChange() {
+            const sheetName = document.getElementById('sheetSelect').value;
             const worksheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-            processData(jsonData);
+            processData(XLSX.utils.sheet_to_json(worksheet, { header: 1 }));
         }
 
         function processData(data) {
-            const outputDiv = document.getElementById('output');
-            const summary = document.getElementById('summary');
-            outputDiv.innerHTML = '';
-            summary.textContent = '';
-
-            if (!data.length) {
-                outputDiv.innerHTML = '<p class="error">לא נמצאו נתונים בקובץ.</p>';
-                return;
-            }
-
+            duplicateEntries = [];
+            originalEntries = [];
             const duplicates = {};
+
             data.forEach((row, rowIndex) => {
                 row.forEach((cell) => {
                     const key = JSON.stringify(cell);
-                    if (!duplicates[key]) {
-                        duplicates[key] = [];
-                    }
+                    if (!duplicates[key]) duplicates[key] = [];
                     duplicates[key].push(rowIndex + 1);
                 });
             });
 
-            duplicateEntries = Object.entries(duplicates).filter(([key, rows]) => rows.length > 1);
-            originalEntries = [...duplicateEntries]; // שמירת הנתונים המקוריים
-
-            if (!duplicateEntries.length) {
-                outputDiv.innerHTML = '<p class="success">לא נמצאו כפילויות.</p>';
-                return;
-            }
-
-            summary.textContent = `נמצאו ${duplicateEntries.length} כפילויות.`;
+            duplicateEntries = Object.entries(duplicates).filter(([_, rows]) => rows.length > 1);
+            originalEntries = [...duplicateEntries];
             renderTable();
         }
 
         function renderTable() {
-            const outputDiv = document.getElementById('output');
-            outputDiv.innerHTML = '';
-
             const searchQuery = document.getElementById('searchInput').value.toLowerCase();
-            let filteredEntries = duplicateEntries;
+            const output = document.getElementById('output');
+            const filteredEntries = searchQuery
+                ? duplicateEntries.filter(([value]) => value.toLowerCase().includes(searchQuery))
+                : duplicateEntries;
 
-            if (searchQuery) {
-                filteredEntries = filteredEntries.filter(([value]) =>
-                    value.toLowerCase().includes(searchQuery)
-                );
-            }
-
-            if (!filteredEntries.length) {
-                outputDiv.innerHTML = '<p class="error">לא נמצאו תוצאות תואמות.</p>';
-                return;
-            }
-
-            const table = document.createElement('table');
-            const thead = document.createElement('thead');
-            const tbody = document.createElement('tbody');
-
-            thead.innerHTML = `
-                <tr>
-                    <th onclick="sortTable(0)">ערך</th>
-                    <th onclick="sortTable(1)">שורות</th>
-                </tr>
-            `;
-
-            filteredEntries.forEach(([value, rows]) => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${value}</td>
-                    <td>${rows.join(', ')}</td>
-                `;
-                tbody.appendChild(row);
-            });
-
-            table.appendChild(thead);
-            table.appendChild(tbody);
-            outputDiv.appendChild(table);
+            output.innerHTML = !filteredEntries.length
+                ? '<p class="error">לא נמצאו תוצאות תואמות.</p>'
+                : `<table><thead>
+                        <tr>
+                            <th onclick="sortTable(0)">ערך</th>
+                            <th onclick="sortTable(1)">שורות</th>
+                        </tr>
+                    </thead><tbody>
+                        ${filteredEntries
+                            .map(([value, rows]) => `<tr><td>${value}</td><td>${rows.join(', ')}</td></tr>`)
+                            .join('')}
+                    </tbody></table>`;
         }
 
         function sortTable(columnIndex) {
+            sortDirection[columnIndex] = sortDirection[columnIndex] === 'asc' ? 'desc' : 'asc';
             duplicateEntries.sort((a, b) => {
-                if (columnIndex === 0) {
-                    return a[0].localeCompare(b[0]);
-                } else {
-                    return a[1].length - b[1].length;
-                }
+                const [valA, valB] = columnIndex === 0 ? [a[0], b[0]] : [a[1].length, b[1].length];
+                return sortDirection[columnIndex] === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
             });
             renderTable();
         }
-        let sortDirection = {}; // משתנה למעקב אחר כיוון המיון עבור כל עמודה
-
-        function sortTable(columnIndex) {
-            if (!sortDirection[columnIndex]) {
-                sortDirection[columnIndex] = "asc"; // ברירת מחדל: סדר עולה
-            } else {
-                sortDirection[columnIndex] = sortDirection[columnIndex] === "asc" ? "desc" : "asc";
-            }
-
-            const direction = sortDirection[columnIndex];
-
-            duplicateEntries.sort((a, b) => {
-                let valueA = columnIndex === 0 ? a[0] : a[1].length;
-                let valueB = columnIndex === 0 ? b[0] : b[1].length;
-
-                if (direction === "asc") {
-                    return valueA > valueB ? 1 : -1;
-                } else {
-                    return valueA < valueB ? 1 : -1;
-                }
-            });
-
-            renderTable();
-}
 
         function resetFilters() {
-            duplicateEntries = [...originalEntries]; // שחזור הנתונים המקוריים
-            document.getElementById('searchInput').value = ''; // איפוס החיפוש
-            renderTable(); // הצגת הטבלה מחדש
+            duplicateEntries = [...originalEntries];
+            document.getElementById('searchInput').value = '';
+            renderTable();
         }
     </script>
 </body>
